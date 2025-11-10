@@ -1,23 +1,32 @@
-# docker_no_redhat  ⚙️ v1.0
+# 🐧 docker_no_redhat ⚙️ v1.0
 
-⚠️ **PENTING**: Skrip dan instruksi di repo ini hanya **untuk Debian / Ubuntu**. **Tidak** untuk Red Hat, CentOS, RHEL, atau turunan mereka.
+⚠️ **PENTING**: Skrip dan instruksi di repo ini hanya **untuk Debian / Ubuntu**.  
+**Tidak** untuk Red Hat, CentOS, RHEL, atau turunan mereka.
 
-Ringkasan: repo ini berisi skrip installer dan uninstaller sederhana untuk memasang Docker di sistem berbasis Debian/Ubuntu.
+Repository ini menyediakan **installer & uninstaller** sederhana untuk memasang **Docker Engine** di sistem berbasis Debian/Ubuntu.
 
 ---
 
-## 🚀 Quick Actions (Visual / Interaktif)
+## 📂 Persiapan Direktori & Clone Repo
 
-> Gunakan perintah di bawah lewat terminal. Emoji di samping hanya untuk keterlihatan.
+Agar rapi, buat dulu direktori khusus untuk repositori ini, lalu lakukan `git clone`:
 
-- ✅ **Prepare** — berikan izin eksekusi:
 ```bash
+# 1️⃣ Buat direktori kerja
+mkdir -p ~/copy
+cd ~/copy
+
+# 2️⃣ Clone repository
+git clone https://github.com/KeiNode/docker_no_redhat.git
+cd ~/copy/docker_no_redhat
+
+🚀 Cara Menjalankan
+1️⃣ Beri izin eksekusi (wajib dilakukan pertama kali)
 chmod +x ./install.sh ./uninstall.sh
 
-▶️ Install Docker:
-
+2️⃣ Jalankan installer
 sudo bash ./install.sh
 
-⛔ Uninstall Docker:
-
+3️⃣ Jalankan uninstaller
 sudo bash ./uninstall.sh
+
