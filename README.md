@@ -30,3 +30,38 @@ sudo bash ./install.sh
 3️⃣ Jalankan uninstaller
 sudo bash ./uninstall.sh
 
+
+## 🩺 Troubleshooting (Masalah Umum) ##
+
+🙂 Command tidak ditemukan / tidak bisa jalan
+
+Pastikan bash terpasang → which bash
+
+Pastikan file sudah memiliki izin eksekusi atau jalankan dengan bash ./install.sh
+
+🛠 Gagal saat apt update atau apt install
+
+Jalankan sudo apt update secara manual, lalu ulangi instalasi
+
+Pastikan koneksi internet aktif dan tidak diblokir proxy
+
+🔐 Permission denied
+
+Jalankan dengan sudo
+
+Pastikan user termasuk dalam grup sudo
+
+🐳 Docker tidak berjalan setelah instalasi
+
+Cek status service → sudo systemctl status docker
+
+Cek log service → sudo journalctl -u docker --no-pager
+
+♻️ Masih ada sisa file setelah uninstall
+
+Cek paket tersisa: dpkg -l | grep -i docker
+
+Hapus manual jika perlu:
+
+sudo rm -rf /var/lib/docker
+
