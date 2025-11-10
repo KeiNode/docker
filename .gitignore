@@ -1,27 +1,103 @@
 # =========================================
-# docker_no_redhat .gitignore
-# Hanya untuk Debian/Ubuntu Docker installer
+# .gitignore for docker_no_redhat
+# Target OS: Debian / Ubuntu (Not RedHat)
+# Project Type: Shell-based Docker Installer
 # =========================================
 
-# Log dan hasil output
+# =========================
+# 🔹 System & OS Files
+# =========================
+# macOS Finder metadata
+.DS_Store
+
+# Windows Explorer metadata
+Thumbs.db
+Desktop.ini
+
+# Linux temporary files
+*~
+*.swp
+*.swo
+
+# =========================
+# 🔹 Logs & Cache
+# =========================
+# Log files and temp output
 *.log
 *.out
+*.err
 *.bak
 *.tmp
+*.old
 
-# File editor (VSCode, vim, dsb)
-.vscode/
-*.swp
+# Custom installer logs
+install.log
+uninstall.log
+debug.log
 
-# File sistem & OS
-.DS_Store
-Thumbs.db
-
-# Folder sementara (jika nanti ditambahkan)
-tmp/
+# Cache / temp directories
 cache/
+tmp/
+temp/
 backup/
 
-# Python cache (kalau nanti tambah tools Python)
-__pycache__/
-*.pyc
+# =========================
+# 🔹 Development Environments
+# =========================
+# VSCode
+.vscode/
+
+# JetBrains IDEs (PyCharm, IntelliJ, etc.)
+.idea/
+
+# Vim / Neovim swap files
+*.swp
+*.swo
+
+# Nano backup
+*.save
+
+# =========================
+# 🔹 Docker / Containers
+# =========================
+# Docker environment artifacts
+.docker/
+docker-compose.override.yml
+docker-compose.override.yaml
+
+# Docker build cache
+*.tar
+*.img
+*.pid
+
+# =========================
+# 🔹 Shell / Script Outputs
+# =========================
+# Any generated script output or compiled version
+*.sh~
+*.sh.save
+*.bak.sh
+*.tmp.sh
+
+# =========================
+# 🔹 Miscellaneous
+# =========================
+# Local environment variables or secrets
+.env
+.env.*
+.secret
+secrets.txt
+
+# Backup or sync folders
+sync/
+old_versions/
+archive/
+
+# =========================
+# 🔹 Optional: Project-specific exclusions
+# =========================
+# Don’t ignore our main scripts
+!install.sh
+!uninstall.sh
+!README.md
+!LICENSE
