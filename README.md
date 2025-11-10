@@ -30,6 +30,3 @@ sudo bash ./install.sh
 3️⃣ Jalankan uninstaller
 sudo bash ./uninstall.sh
 
-
-BY A.Z.L
-
