@@ -4,7 +4,7 @@
 set -euo pipefail
 
 # Colors
-PURPLE='\033[96m'
+CYAN='\033[96m'
 GREEN='\033[32m'
 RED='\033[31m'
 YELLOW='\033[33m'
