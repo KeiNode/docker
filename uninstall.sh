@@ -66,7 +66,7 @@ uninstall_docker(){
 
 print_goodbye(){
   echo -e "${BLUE}┌───────────────────────────────────────────────┐${RESET}"
-  echo -e "${BLUE}│${WHITE}            Bye, User!                  ${BLUE}│${RESET}"
+  echo -e "${BLUE}│${WHITE}                   Bye, User!                  ${BLUE}│${RESET}"
   echo -e "${BLUE}└───────────────────────────────────────────────┘${RESET}\n"
 }
 
