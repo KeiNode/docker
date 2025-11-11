@@ -39,24 +39,48 @@ confirm_prompt_default_yes() {
 }
 
 # -------------------------
-# Banner
+# Banner: Docker-like whale (colored)
 # -------------------------
-cat <<'BANNER'
+print_banner() {
+  BLUE='\033[1;34m'   # bright blue
+  CYAN='\033[1;36m'   # cyan for name
+  WHITE='\033[1;37m'  # white accents
+  RESET='\033[0m'
 
-             ##         .
-           ## ##       ==
-        ## ## ##      ===
-     /""""""""""""\___/ ===
-    {                   /  ===-
-     \  O   O   O   O  /    ===-
-      \               /      ===-
-       '-------------'
-        \  A . Z . L /      ⚓
-         `---------'
+  # Whale logo (multi-line). Kept terminal-friendly width.
+  printf "%b\n" "${BLUE}\
+             ┌─────────────────────────────────────────┐\n\
+             │                                         │\n\
+             │    ██████╗  ██████╗ ███████╗ ██████╗    │\n\
+             │   ██╔═══██╗██╔════╝ ██╔════╝██╔═══██╗   │\n\
+             │   ██║   ██║██║  ███╗█████╗  ██║   ██║   │\n\
+             │   ██║   ██║██║   ██║██╔══╝  ██║   ██║   │\n\
+             │   ╚██████╔╝╚██████╔╝███████╗╚██████╔╝   │\n\
+             │    ╚═════╝  ╚═════╝ ╚══════╝ ╚═════╝    │\n\
+             │                                         │\n\
+             └─────────────────────────────────────────┘\n\n\
+               ${WHITE}         .-\"\"\"\"\"-.\n\
+               ${WHITE}       .'  _     '.      ${BLUE}  ____\n\
+               ${WHITE}      /   (_)     \\    ${BLUE} .'    '.  \n\
+               ${WHITE}     |  ,-.  .-.  |   ${BLUE} /  .--.  \\ \n\
+               ${WHITE}     |  | |  | |  |  ${BLUE} |  /    \\  |\n\
+               ${WHITE}      \\  '-'  '-' /   ${BLUE}  \\ \\__/ /  /\n\
+               ${WHITE}       '.       .'     ${BLUE}   '.__.'  '\n\
+               ${WHITE}         '-...-'${RESET}\n"
 
-BANNER
+  # Stacked container boxes on whale back (simple)
+  printf "%b\n" "${BLUE}               ┌──────────────┐  ┌──────────────┐\n\
+               │  [ ]  [ ]  []│  │  [ ]  [ ]  []│\n\
+               └──────────────┘  └──────────────┘${RESET}\n"
 
-bold "A.Z.L"
+  # Name line
+  printf "%b\n" "${WHITE}────────────────────────────────────────────────────────${RESET}\n"
+  printf "%b\n" "                       ${CYAN}A.Z.L${RESET}\n"
+  printf "%b\n" "${WHITE}────────────────────────────────────────────────────────${RESET}\n"
+}
+
+# Print banner (safe: purely visual)
+print_banner
 echo
 status_box "Starting Docker installer for Debian/Ubuntu (NotRedHat)" info
 echo
