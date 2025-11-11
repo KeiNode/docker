@@ -1,8 +1,9 @@
+
 #!/usr/bin/env bash
-# install.sh - Installer Docker untuk Debian / Ubuntu
+# install.sh - Docker installer for Debian/Ubuntu
 # Author: AZ.L
-# Deskripsi: Script interaktif untuk menginstall Docker, mengatur data-root, membuat/menambahkan user untuk menjalankan Docker tanpa sudo,
-# dan menampilkan banner + animasi progress.
+# Description: Interactive script to install Docker, configure data-root, add/create a user to run Docker without sudo,
+# and display a banner + progress animation.
 
 set -o pipefail
 
@@ -40,14 +41,14 @@ print_banner(){
   printf "%b\n" "${BLUE}             └──────────────────────────────────┘${RESET}\n"
 
   printf "%b\n" "${BLUE}____________________________"
-  printf "%b\n" "< Halo dari Docker | A.Z.L ! >"
+  printf "%b\n" "< Hello from Docker | A.Z.L ! >"
   printf "%b\n" " ----------------------------"
   printf "%b\n" "  \\"
   printf "%b\n" "   \\"
   printf "%b\n" "        ##         ."
   printf "%b\n" "      ## ## ## =="
   printf "%b\n" "    ## ## ## ## ==="
-  printf "%b\n" "\"\"\"\"\"\"\"\"\"\"\"\"\"\"\"\\___/ ==="
+  printf "%b\n" "\\"\\"\\"\\"\\"\\"\\"\\"\\"\\"\\"\\"\\"\\___/ ==="
   printf "%b\n" "~~~ {~~ ~~~~ ~~~ ~~~~ ~~ ~ / ===-- ~~~\\"
   printf "%b\n" "     \\______ o __/"
   printf "%b\n" "      \\ \\ __/"
@@ -69,12 +70,12 @@ detect_os(){
         ;;
       *)
         log "Unsupported OS: $ID"
-        echo -e "${RED}Maaf: script ini hanya mendukung Ubuntu dan Debian.${RESET}"
+        echo -e "${RED}Sorry: this script supports only Ubuntu and Debian.${RESET}"
         exit 1
         ;;
     esac
   else
-    echo -e "${RED}Tidak bisa mendeteksi OS.${RESET}"
+    echo -e "${RED}Unable to detect OS.${RESET}"
     exit 1
   fi
   log "Detected OS=$OS version=$OS_VERSION"
@@ -88,7 +89,7 @@ run_and_check(){
     log "OK: $desc"
     return 0
   else
-    printf "%b" "${RED}[ERR]${RESET} $desc (lihat $LOGFILE)\n"
+    printf "%b" "${RED}[ERR]${RESET} $desc (see $LOGFILE)\n"
     log "ERR: $desc"
     ERR_COUNT=$((ERR_COUNT+1))
     return 1
@@ -108,7 +109,7 @@ install_docker(){
   run_and_check "add Docker GPG key" bash -c "curl -fsSL https://download.docker.com/linux/$OS/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg"
 
   # Set up repository
-  echo "\nSetting up Docker repo..." | tee -a "$LOGFILE"
+  echo "\nSetting up Docker repository..." | tee -a "$LOGFILE"
   repo_line="deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/$OS $(lsb_release -cs) stable"
   echo "$repo_line" > /etc/apt/sources.list.d/docker.list
   run_and_check "apt update (after adding repo)" apt-get update -y
@@ -122,10 +123,11 @@ install_docker(){
 configure_data_root(){
   SAFE_DEFAULT="/opt/docker-data"
   echo -e "\nDefault recommended Docker data directory: ${CYAN}$SAFE_DEFAULT${RESET}"
-  read -r -p "Gunakan lokasi ini? [Y/n]: " use_safe
-n=${use_safe:-Y}
-  if [[ "$n" =~ ^[Nn] ]]; then
-    read -r -p "Masukkan path custom untuk data-root (contoh: /mnt/docker-data): " custom_path
+  read -r -p "Use this location? [Y/n]: " use_safe
+  use_safe=${use_safe:-Y}
+
+  if [[ "$use_safe" =~ ^[Nn] ]]; then
+    read -r -p "Enter a custom path for data-root (e.g. /mnt/docker-data): " custom_path
     DATA_ROOT="$custom_path"
   else
     DATA_ROOT="$SAFE_DEFAULT"
@@ -152,37 +154,37 @@ EOF
 
 # Create or add a user to docker group for running without sudo
 create_or_add_user(){
-  echo -e "\nAgar dapat menjalankan docker tanpa sudo, kita perlu menambahkan user ke group 'docker'."
+  echo -e "\nTo run docker without sudo, we will add a user to the 'docker' group."
   DEFAULT_USER_NAME="docker"
-  read -r -p "Buat/gunakan user bernama '${DEFAULT_USER_NAME}'? [Y/n]: " use_default
+  read -r -p "Create/use a user named '${DEFAULT_USER_NAME}'? [Y/n]: " use_default
   use_default=${use_default:-Y}
   if [[ "$use_default" =~ ^[Yy] ]]; then
     TARGET_USER="$DEFAULT_USER_NAME"
     if id -u "$TARGET_USER" >/dev/null 2>&1; then
-      log "User $TARGET_USER sudah ada. Menambahkan ke group docker."
+      log "User $TARGET_USER already exists. Adding to docker group."
       run_and_check "add existing user $TARGET_USER to docker group" usermod -aG docker "$TARGET_USER"
     else
-      # create a system user with no-login but can sudo? We'll create without password
+      # create a system user without login
       run_and_check "create system user $TARGET_USER" useradd -m -s /usr/sbin/nologin "$TARGET_USER"
       run_and_check "add $TARGET_USER to docker group" usermod -aG docker "$TARGET_USER"
     fi
   else
-    read -r -p "Masukkan nama user yang ingin ditambahkan ke group docker: " TARGET_USER
+    read -r -p "Enter the username to add to the docker group: " TARGET_USER
     if [ -z "$TARGET_USER" ]; then
-      echo -e "${YELLOW}Nama user kosong — melewatkan penambahan user.${RESET}"
+      echo -e "${YELLOW}Empty username — skipping user add.${RESET}"
       log "User add skipped (empty name)"
       return
     fi
     if id -u "$TARGET_USER" >/dev/null 2>&1; then
       run_and_check "add existing user $TARGET_USER to docker group" usermod -aG docker "$TARGET_USER"
     else
-      read -r -p "User tidak ditemukan. Buat user baru bernama '$TARGET_USER'? [Y/n]: " create_user_confirm
+      read -r -p "User not found. Create new user named '$TARGET_USER'? [Y/n]: " create_user_confirm
       create_user_confirm=${create_user_confirm:-Y}
       if [[ "$create_user_confirm" =~ ^[Yy] ]]; then
         run_and_check "create user $TARGET_USER" useradd -m -s /bin/bash "$TARGET_USER"
         run_and_check "add $TARGET_USER to docker group" usermod -aG docker "$TARGET_USER"
       else
-        echo -e "${YELLOW}Penambahan user dibatalkan.${RESET}"
+        echo -e "${YELLOW}User addition canceled.${RESET}"
         log "User add cancelled"
       fi
     fi
@@ -190,8 +192,8 @@ create_or_add_user(){
 
   # Inform
   if id -u "$TARGET_USER" >/dev/null 2>&1; then
-    echo -e "${GREEN}User '$TARGET_USER' sekarang anggota group 'docker'.${RESET}"
-    echo -e "${YELLOW}Catatan: untuk berlaku, user yang sudah login perlu logout/login kembali (atau jalankan: newgrp docker).${RESET}"
+    echo -e "${GREEN}User '$TARGET_USER' is now a member of the 'docker' group.${RESET}"
+    echo -e "${YELLOW}Note: to apply, the user must log out and back in (or run: newgrp docker).${RESET}"
   fi
 }
 
@@ -211,7 +213,6 @@ progress_bar(){
 
 # Simulate percentage for operations that take time (for nicer UX)
 simulate_progress(){
-  total=$1
   desc="$2"
   for ((p=0; p<=100; p+=10)); do
     printf "\r%s %3d%%" "$desc" "$p"
@@ -222,12 +223,12 @@ simulate_progress(){
 
 # Check docker status quickly
 check_docker_health(){
-  echo -e "\nMemeriksa status Docker..."
+  echo -e "\nChecking Docker status..."
   if docker info >/dev/null 2>&1; then
-    printf "%b\n" "${GREEN}Docker berjalan dan dapat dijalankan.${RESET}"
+    printf "%b\n" "${GREEN}Docker is running and responding.${RESET}"
     log "Docker OK"
   else
-    printf "%b\n" "${RED}Docker tidak merespon. Cek service dan log di $LOGFILE${RESET}"
+    printf "%b\n" "${RED}Docker is not responding. Check service and logs in $LOGFILE${RESET}"
     log "Docker not responding"
     ERR_COUNT=$((ERR_COUNT+1))
   fi
@@ -240,10 +241,10 @@ main(){
   echo -e "Detected: ${CYAN}$OS $OS_VERSION${RESET}\n"
 
   # Confirm continue
-  read -r -p "Lanjutkan instalasi Docker di sistem ini? [Y/n]: " proceed
+  read -r -p "Continue to install Docker on this system? [Y/n]: " proceed
   proceed=${proceed:-Y}
   if [[ ! "$proceed" =~ ^[Yy] ]]; then
-    echo "Dibatalkan oleh user."
+    echo "Cancelled by user."
     exit 0
   fi
 
@@ -252,11 +253,11 @@ main(){
     install_docker
   ) &
   pid_install=$!
-  progress_bar "$pid_install" "Menginstall Docker..."
+  progress_bar "$pid_install" "Installing Docker..."
 
   # If docker install failed, still attempt to continue gracefully
   if [ $ERR_COUNT -gt 0 ]; then
-    echo -e "\n${YELLOW}Terjadi beberapa peringatan/eror selama instalasi. Lihat $LOGFILE untuk detail.${RESET}"
+    echo -e "\n${YELLOW}There were some warnings/errors during installation. See $LOGFILE for details.${RESET}"
   fi
 
   # Configure data root
@@ -266,17 +267,17 @@ main(){
   create_or_add_user
 
   # Final checks with simulated progress
-  simulate_progress 5 "Memeriksa dan membersihkan..."
+  simulate_progress 5 "Verifying and cleaning up..."
   check_docker_health
 
   if [ $ERR_COUNT -eq 0 ]; then
-    echo -e "\n${GREEN}SUCCESSFULLY INSTALL DOCKER ON YOUR SYSTEM, YEAYYY${RESET}"
+    echo -e "\n${GREEN}SUCCESSFULLY INSTALLED DOCKER ON YOUR SYSTEM, YAY!${RESET}"
   else
-    echo -e "\n${YELLOW}Instalasi selesai dengan ${ERR_COUNT} peringatan/eror. Periksa $LOGFILE untuk detail.${RESET}"
+    echo -e "\n${YELLOW}Installation completed with ${ERR_COUNT} warnings/errors. Check $LOGFILE for details.${RESET}"
   fi
 
   echo -e "\n${CYAN}Author: AZ.L${RESET}"
-  echo -e "${WHITE}Terima kasih telah menggunakan installer ini. Selamat mencoba!${RESET}\n"
+  echo -e "${WHITE}Thank you for using this installer. Good luck!${RESET}\n"
 
   log "Finish. ERR_COUNT=$ERR_COUNT"
 }
