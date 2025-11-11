@@ -1,268 +1,322 @@
 #!/usr/bin/env bash
-# install.sh - Docker installer for Debian/Ubuntu
-# Author: AZ.L
-# Description: Interactive script to install Docker, configure data-root, add/create a user to run Docker without sudo,
-# and display a banner + check/cross feedback for every important step.
+# install - Docker installer (interactive, idempotent)
+# Author: A.Z.L
+# Language: English
+# Usage: sudo ./install [--yes] [--dry-run] [--install-compose plugin|binary|none] [--add-user <user>] [--skip-verify] [--reinstall] [--rollback-on-failure] [--log-file <path>]
 
-set -o pipefail
-set -u
+set -euo pipefail
+IFS=$'\n\t'
 
-# Colors
-BLUE="\e[34m"
-CYAN="\e[36m"
-WHITE="\e[97m"
-GREEN="\e[32m"
-YELLOW="\e[33m"
-RED="\e[31m"
-RESET="\e[0m"
+# ---------------------------
+# Banner (whale ASCII)
+# ---------------------------
+WHale_BANNER='''
+              ##         .
+           ## ## ##        ==
+        ## ## ## ## ##    ===
+    /""""""""""""""""""""\___/ ===
+   {                       /  ===-
+    \______A.Z.L__________/          
+      /  /  /  /  /  /          
+    -----------------------------
+          Docker Installer
+'''
 
-# Globals
-OS=""
-OS_VERSION=""
-ERR_COUNT=0
-LOGFILE="/tmp/install-docker-azl.log"
-:> "$LOGFILE"
+# ---------------------------
+# Defaults
+# ---------------------------
+DRY_RUN=0
+ASSUME_YES=0
+INSTALL_COMPOSE="none"
+ADD_USER=""
+SKIP_VERIFY=0
+REINSTALL=0
+ROLLBACK_ON_FAILURE=0
+LOG_FILE=""
 
+# auto timestamp
+TS=$(date +"%Y%m%d_%H%M%S")
+DEFAULT_LOG="/var/log/docker_install_${TS}.log"
+
+# Temp state for rollback
+ADDED_REPO=0
+ADDED_KEY=0
+INSTALLED_PKGS=()
+
+# ---------------------------
+# Helpers
+# ---------------------------
 log(){
-  echo "$(date +'%Y-%m-%d %H:%M:%S') - $*" | tee -a "$LOGFILE"
+  echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] $*" | tee -a "$LOG_FILE"
 }
 
-print_banner(){
-  printf "%b\n" "${BLUE}┌──────────────────────────────────┐${RESET}"
-  printf "%b\n" "${BLUE}│                                  │${RESET}"
-  printf "%b\n" "${BLUE}│       ${WHITE}A.L${BLUE}                       │${RESET}"
-  printf "%b\n" "${BLUE}└──────────────────────────────────┘${RESET}"
-  printf "\n"
-  printf "%b\n" "${WHITE}────────────────────────────────────────────────────────${RESET}"
-  printf "%b\n" "                       ${CYAN}DOCKER | A.Z.L${RESET}"
-  printf "%b\n" "${WHITE}────────────────────────────────────────────────────────${RESET}"
-  printf "\n"
+run(){
+  if [ "$DRY_RUN" -eq 1 ]; then
+    echo "DRY-RUN: $*"
+  else
+    log "+ $*"
+    eval "$@"
+  fi
 }
 
-# status helpers
-ok(){ printf '%b\n' "${GREEN}[✔]${RESET} $*"; }
-err(){ printf '%b\n' "${RED}[✖]${RESET} $*"; }
+prompt_yes_no(){
+  local prompt="$1"
+  if [ "$ASSUME_YES" -eq 1 ]; then
+    return 0
+  fi
+  local resp
+  read -r -p "$prompt [Y/n]: " resp
+  resp=${resp:-Y}
+  case "${resp^^}" in
+    Y|YES) return 0;;
+    N|NO) return 1;;
+    *) return 1;;
+  esac
+}
 
-# Detect OS
-detect_os(){
+detect_distro(){
   if [ -f /etc/os-release ]; then
     . /etc/os-release
-    case "$ID" in
-      ubuntu|debian)
-        OS="$ID"
-        OS_VERSION="$VERSION_ID"
-        ;;
-      *)
-        log "Unsupported OS: $ID"
-        err "Sorry: this script supports only Ubuntu and Debian."
-        exit 1
-        ;;
-    esac
+    DISTRO_ID=${ID,,}
+    DISTRO_NAME=$NAME
+    DISTRO_VER=$VERSION_ID
   else
-    err "Unable to detect OS."
-    exit 1
-  fi
-  log "Detected OS=$OS version=$OS_VERSION"
-  ok "Detected OS: $OS $OS_VERSION"
-}
-
-# Run command and print check/cross, log output
-# Usage: run_and_check "description" cmd arg1 arg2 ...
-run_and_check(){
-  desc="$1"; shift || true
-  if "$@" >>"$LOGFILE" 2>&1; then
-    ok "$desc"
-    return 0
-  else
-    err "$desc (see $LOGFILE)"
-    ERR_COUNT=$((ERR_COUNT+1))
-    return 1
+    DISTRO_ID="unknown"
+    DISTRO_NAME="unknown"
+    DISTRO_VER=""
   fi
 }
 
-# Install prerequisites, add repo and install docker
-install_docker(){
-  ok "Updating apt cache..."
-  run_and_check "apt update" apt-get update -y
-
-  ok "Installing prerequisites..."
-  run_and_check "install apt-transport-https ca-certificates curl gnupg lsb-release" \
-    apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release
-
-  ok "Adding Docker GPG key..."
-  run_and_check "add Docker GPG key" bash -c "curl -fsSL https://download.docker.com/linux/$OS/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg"
-
-  ok "Setting up Docker repository..."
-  repo_line="deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/$OS $(lsb_release -cs) stable"
-  if echo "$repo_line" > /etc/apt/sources.list.d/docker.list 2>>"$LOGFILE"; then
-    ok "wrote /etc/apt/sources.list.d/docker.list"
-  else
-    err "failed to write docker.list (see $LOGFILE)"
-    ERR_COUNT=$((ERR_COUNT+1))
-  fi
-
-  ok "Refreshing apt cache after adding repo..."
-  run_and_check "apt update (after adding repo)" apt-get update -y
-
-  ok "Installing Docker packages..."
-  run_and_check "install docker packages (docker-ce docker-ce-cli containerd.io)" \
-    apt-get install -y docker-ce docker-ce-cli containerd.io
+is_root(){
+  [ "$(id -u)" -eq 0 ]
 }
 
-# Configure data-root (safe default: /opt/docker-data)
-configure_data_root(){
-  SAFE_DEFAULT="/opt/docker-data"
-  printf "\nDefault recommended Docker data directory: %b%s%b\n" "$CYAN" "$SAFE_DEFAULT" "$RESET"
-  read -r -p "Use this location? [Y/n]: " use_safe
-  use_safe=${use_safe:-Y}
-
-  if [[ "$use_safe" =~ ^[Nn] ]]; then
-    read -r -p "Enter a custom path for data-root (e.g. /mnt/docker-data): " custom_path
-    DATA_ROOT="${custom_path:-$SAFE_DEFAULT}"
-  else
-    DATA_ROOT="$SAFE_DEFAULT"
+ensure_root(){
+  if ! is_root; then
+    echo "This installer must be run as root. Re-run with sudo or as root." >&2
+    exit 2
   fi
-
-  run_and_check "create data-root $DATA_ROOT" bash -c "mkdir -p '$DATA_ROOT' && chown root:root '$DATA_ROOT' && chmod 711 '$DATA_ROOT'"
-
-  mkdir -p /etc/docker
-  if cat > /etc/docker/daemon.json <<EOF
-{
-  "data-root": "$DATA_ROOT",
-  "log-driver": "json-file",
-  "log-opts": {"max-size": "10m", "max-file": "3"}
-}
-EOF
-  then
-    ok "wrote /etc/docker/daemon.json"
-  else
-    err "failed to write /etc/docker/daemon.json"
-  fi
-
-  run_and_check "reload systemd" systemctl daemon-reload || true
-  run_and_check "enable docker service" systemctl enable docker || true
-  run_and_check "start docker service" systemctl restart docker || true
 }
 
-# Create or add a user to docker group for running without sudo
-create_or_add_user(){
-  printf "\nTo run docker without sudo, we will add a user to the 'docker' group.\n"
-  INVOKER="${SUDO_USER:-$USER}"
-  DEFAULT_USER_NAME="$INVOKER"
+# ---------------------------
+# Rollback logic
+# ---------------------------
+do_rollback(){
+  log "Rollback initiated"
+  if [ "$DRY_RUN" -eq 1 ]; then
+    log "Dry-run: no rollback actions executed"
+    return
+  fi
+  # Attempt to remove installed packages
+  if [ "${#INSTALLED_PKGS[@]}" -gt 0 ]; then
+    log "Removing packages: ${INSTALLED_PKGS[*]}"
+    if [[ "$PKG_MANAGER" == "apt" ]]; then
+      apt-get remove -y "${INSTALLED_PKGS[@]}" || true
+    elif [[ "$PKG_MANAGER" == "dnf" || "$PKG_MANAGER" == "yum" ]]; then
+      ${PKG_MANAGER} remove -y "${INSTALLED_PKGS[@]}" || true
+    fi
+  fi
+  # Remove repo file if added
+  if [ "$ADDED_REPO" -eq 1 ]; then
+    log "Removing Docker repo file"
+    rm -f /etc/apt/sources.list.d/docker.list || true
+    rm -f /etc/apt/sources.list.d/docker*.repo || true
+  fi
+  # Remove keyring if added
+  if [ "$ADDED_KEY" -eq 1 ]; then
+    log "Removing docker keyring (best-effort)"
+    rm -f /usr/share/keyrings/docker-archive-keyring.gpg || true
+  fi
+  log "Rollback complete"
+}
 
-  read -r -p "Add the user '${DEFAULT_USER_NAME}' to the 'docker' group? [Y/n]: " use_default
-  use_default=${use_default:-Y}
+on_error(){
+  local rc=$?
+  log "Error: installer failed with exit code $rc"
+  if [ "$ROLLBACK_ON_FAILURE" -eq 1 ]; then
+    do_rollback
+  fi
+  log "Log file: $LOG_FILE"
+  exit $rc
+}
 
-  if [[ "$use_default" =~ ^[Yy] ]]; then
-    TARGET_USER="$DEFAULT_USER_NAME"
-    if id -u "$TARGET_USER" >/dev/null 2>&1; then
-      run_and_check "add existing user $TARGET_USER to docker group" usermod -aG docker "$TARGET_USER"
+trap on_error ERR
+
+# ---------------------------
+# Arg parsing
+# ---------------------------
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --dry-run) DRY_RUN=1; shift;;
+    --yes|-y) ASSUME_YES=1; shift;;
+    --install-compose) INSTALL_COMPOSE="$2"; shift 2;;
+    --add-user) ADD_USER="$2"; shift 2;;
+    --skip-verify) SKIP_VERIFY=1; shift;;
+    --reinstall) REINSTALL=1; shift;;
+    --rollback-on-failure) ROLLBACK_ON_FAILURE=1; shift;;
+    --log-file) LOG_FILE="$2"; shift 2;;
+    --help|-h) echo "Usage: sudo ./install [--yes] [--dry-run] [--install-compose plugin|binary|none] [--add-user user] [--skip-verify] [--reinstall] [--rollback-on-failure] [--log-file path]"; exit 0;;
+    *) echo "Unknown arg: $1"; exit 2;;
+  esac
+done
+
+# set log file default
+if [ -z "$LOG_FILE" ]; then
+  LOG_FILE="$DEFAULT_LOG"
+fi
+
+# ensure writable log file (if not dry-run)
+if [ "$DRY_RUN" -eq 0 ]; then
+  mkdir -p "$(dirname "$LOG_FILE")" || true
+  touch "$LOG_FILE" || true
+  chmod 644 "$LOG_FILE" || true
+fi
+
+# ---------------------------
+# Start
+# ---------------------------
+clear
+echo "$WHale_BANNER"
+echo "Installer: A.Z.L — Docker automated installer"
+
+detect_distro
+log "Detected distro: $DISTRO_NAME ($DISTRO_ID) $DISTRO_VER"
+
+ensure_root
+
+if ! prompt_yes_no "Proceed with Docker installation on $DISTRO_NAME ($DISTRO_VER)?"; then
+  log "User aborted"
+  exit 0
+fi
+
+# ---------------------------
+# Basic checks
+# ---------------------------
+if command -v docker >/dev/null 2>&1; then
+  EXISTING_DOCKER_VERSION=$(docker --version 2>/dev/null || true)
+  log "Existing Docker detected: ${EXISTING_DOCKER_VERSION:-unknown}"
+  if [ "$REINSTALL" -eq 0 ]; then
+    if prompt_yes_no "Docker is already installed. Do you want to (re)install/upgrade anyway?"; then
+      REINSTALL=1
     else
-      read -r -p "User '$TARGET_USER' not found. Create system user named 'docker' (nologin)? [y/N]: " create_sys
-      create_sys=${create_sys:-N}
-      if [[ "$create_sys" =~ ^[Yy] ]]; then
-        run_and_check "create system user 'docker' (nologin)" useradd -m -s /usr/sbin/nologin docker
-        run_and_check "add 'docker' user to docker group" usermod -aG docker docker
-        TARGET_USER="docker"
-      else
-        err "No user added to docker group."
-        return
-      fi
-    fi
-  else
-    read -r -p "Enter the username to add to the docker group: " TARGET_USER
-    if [ -z "$TARGET_USER" ]; then
-      printf "%b\n" "${YELLOW}Empty username — skipping user add.${RESET}"
-      log "User add skipped (empty name)"
-      return
-    fi
-    if id -u "$TARGET_USER" >/dev/null 2>&1; then
-      run_and_check "add existing user $TARGET_USER to docker group" usermod -aG docker "$TARGET_USER"
-    else
-      read -r -p "User not found. Create new user named '$TARGET_USER'? [Y/n]: " create_user_confirm
-      create_user_confirm=${create_user_confirm:-Y}
-      if [[ "$create_user_confirm" =~ ^[Yy] ]]; then
-        run_and_check "create user $TARGET_USER" useradd -m -s /bin/bash "$TARGET_USER"
-        run_and_check "add $TARGET_USER to docker group" usermod -aG docker "$TARGET_USER"
-      else
-        printf "%b\n" "${YELLOW}User addition canceled.${RESET}"
-        log "User add cancelled"
-        return
-      fi
+      log "Skipping installation because Docker exists and reinstall not requested"
+      exit 0
     fi
   fi
+fi
 
-  ok "User '$TARGET_USER' is now a member of the 'docker' group."
-  if [ "$TARGET_USER" = "${SUDO_USER:-$USER}" ] || [ "$TARGET_USER" = "$USER" ]; then
-    echo ""
-    echo "To apply the new group membership immediately for the current session, choose one of:"
-    echo "  1) Run: newgrp docker    (switches current shell to new group; opens a subshell)"
-    echo "  2) Log out and log back in (or reboot)"
-    read -r -p "Run 'newgrp docker' now for this shell? [y/N]: " run_now
-    run_now=${run_now:-N}
-    if [[ "$run_now" =~ ^[Yy] ]]; then
-      if [ "$(id -u)" -eq 0 ] && [ -n "${SUDO_USER:-}" ]; then
-        # run newgrp as the invoking user
-        sudo -u "$TARGET_USER" newgrp docker
-        ok "Activated docker group in a subshell for user $TARGET_USER (run 'exit' to return)."
-      else
-        newgrp docker
-        ok "Activated docker group in this shell (subshell). Run 'exit' to return."
-      fi
-    else
-      printf "%b\n" "${YELLOW}Remember: the user must log out/log in (or run 'newgrp docker') to use docker without sudo.${RESET}"
-    fi
+# ---------------------------
+# Distro-specific implementation (focus: Debian/Ubuntu, fallback warn)
+# ---------------------------
+PKG_MANAGER=""
+if [[ "$DISTRO_ID" == "ubuntu" || "$DISTRO_ID" == "debian" ]]; then
+  PKG_MANAGER=apt
+  log "Using apt-based installation"
+  # update
+  run "apt-get update -y"
+  # prerequisites
+  run "apt-get install -y ca-certificates curl gnupg lsb-release"
+  # add docker GPG key
+  if [ ! -f /usr/share/keyrings/docker-archive-keyring.gpg ]; then
+    run "curl -fsSL https://download.docker.com/linux/$DISTRO_ID/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg"
+    ADDED_KEY=1
   else
-    printf "%b\n" "${YELLOW}If you added a different user, they must log out & back in to apply group change.${RESET}"
+    log "Docker keyring already present"
   fi
-}
-
-# Check docker status using run_and_check
-check_docker_health(){
-  printf "\nChecking Docker status...\n"
-  # 'docker info' may return non-zero if daemon not running; use bash -c wrapper
-  if bash -c "docker info > /dev/null 2>&1"; then
-    ok "Docker is running and responding."
+  # add repo
+  if [ ! -f /etc/apt/sources.list.d/docker.list ]; then
+    run "echo \"deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/$DISTRO_ID $(lsb_release -cs) stable\" > /etc/apt/sources.list.d/docker.list"
+    ADDED_REPO=1
   else
-    err "Docker is not responding. Check service and logs in $LOGFILE"
-    ERR_COUNT=$((ERR_COUNT+1))
+    log "Docker repo already present"
   fi
-}
-
-main(){
-  print_banner
-  detect_os
-
-  echo ""
-  read -r -p "Continue to install Docker on this system? [Y/n]: " proceed
-  proceed=${proceed:-Y}
-  if [[ ! "$proceed" =~ ^[Yy] ]]; then
-    printf "%b\n" "${YELLOW}Cancelled by user.${RESET}"
-    exit 0
-  fi
-
-  # Run installation (synchronously) and report
-  install_docker
-
-  if [ $ERR_COUNT -gt 0 ]; then
-    printf "\n%b\n" "${YELLOW}There were some warnings/errors during installation. See $LOGFILE for details.${RESET}"
-  fi
-
-  configure_data_root
-  create_or_add_user
-  check_docker_health
-
-  if [ $ERR_COUNT -eq 0 ]; then
-    printf "\n%b\n" "${GREEN}SUCCESSFULLY INSTALLED DOCKER ON YOUR SYSTEM. YAY!${RESET}"
+  run "apt-get update -y"
+  # install docker packages
+  DOCKER_PKGS=(docker-ce docker-ce-cli containerd.io)
+  run "apt-get install -y ${DOCKER_PKGS[*]}"
+  INSTALLED_PKGS+=("${DOCKER_PKGS[@]}")
+  # enable & start
+  run "systemctl enable docker"
+  run "systemctl start docker"
+  
+elif [[ "$DISTRO_ID" == "fedora" || "$DISTRO_ID" == "centos" || "$DISTRO_ID" == "rhel" || "$DISTRO_ID" == "rocky" || "$DISTRO_ID" == "almalinux" ]]; then
+  PKG_MANAGER=dnf
+  log "Detected RPM-based distro. Attempting dnf/yum flow (best-effort)."
+  if command -v dnf >/dev/null 2>&1; then
+    PKG_MANAGER=dnf
   else
-    printf "\n%b\n" "${YELLOW}Installation completed with ${ERR_COUNT} warnings/errors. Check $LOGFILE for details.${RESET}"
+    PKG_MANAGER=yum
   fi
+  run "$PKG_MANAGER -y install dnf-plugins-core"
+  run "$PKG_MANAGER config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo"
+  run "$PKG_MANAGER install -y docker-ce docker-ce-cli containerd.io"
+  INSTALLED_PKGS+=(docker-ce docker-ce-cli containerd.io)
+  run "systemctl enable --now docker"
+else
+  log "Unsupported or unrecognized distro: $DISTRO_ID. The installer currently supports Debian/Ubuntu and RPM-based distros. For others, please follow Docker official docs: https://docs.docker.com/engine/install/"
+  if ! prompt_yes_no "Continue anyway with best-effort install?"; then
+    exit 3
+  fi
+fi
 
-  echo ""
-  printf "%b\n" "${CYAN}Author: AZ.L${RESET}"
-  printf "%b\n" "${WHITE}Thank you for using this installer. Good luck!${RESET}"
-  log "Finish. ERR_COUNT=$ERR_COUNT"
-}
+# ---------------------------
+# Post install: user group
+# ---------------------------
+if [ -n "$ADD_USER" ]; then
+  if id "$ADD_USER" >/dev/null 2>&1; then
+    run "usermod -aG docker $ADD_USER"
+    log "Added $ADD_USER to docker group"
+  else
+    log "User $ADD_USER does not exist — skipping add-user"
+  fi
+else
+  # prompt to add current user (non-root)
+  if [ "$SUDO_USER" != "" ] && prompt_yes_no "Add $SUDO_USER to docker group to allow non-root docker usage?"; then
+    run "usermod -aG docker $SUDO_USER"
+    log "Added $SUDO_USER to docker group"
+  fi
+fi
 
-# Run
-main "$@"
+# ---------------------------
+# Optional: Docker Compose
+# ---------------------------
+if [[ "$INSTALL_COMPOSE" == "plugin" ]]; then
+  log "Installing Docker Compose plugin (v2 as plugin)"
+  if [[ "$PKG_MANAGER" == "apt" ]]; then
+    run "apt-get install -y docker-compose-plugin"
+    INSTALLED_PKGS+=(docker-compose-plugin)
+  else
+    # best-effort: use package if available
+    run "$PKG_MANAGER install -y docker-compose-plugin || true"
+  fi
+elif [[ "$INSTALL_COMPOSE" == "binary" ]]; then
+  log "Installing Docker Compose (binary)"
+  COMPOSE_DL_URL="https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)"
+  run "curl -L "$COMPOSE_DL_URL" -o /usr/local/bin/docker-compose"
+  run "chmod +x /usr/local/bin/docker-compose"
+fi
+
+# ---------------------------
+# Verification
+# ---------------------------
+if [ "$SKIP_VERIFY" -eq 0 ]; then
+  if prompt_yes_no "Run test container (hello-world) to verify Docker?"; then
+    run "docker run --rm hello-world || true"
+  fi
+else
+  log "Skipping verification as requested"
+fi
+
+log "Docker installation flow completed"
+log "Installed packages (best-effort list): ${INSTALLED_PKGS[*]:-none}"
+log "Log file: $LOG_FILE"
+
+if [ "$DRY_RUN" -eq 0 ]; then
+  echo
+  echo "========================================"
+  echo "Docker install finished — A.Z.L" | tee -a "$LOG_FILE"
+  echo "If you added a user to the docker group, ask them to logout & login again." | tee -a "$LOG_FILE"
+  echo "========================================="
+fi
+
+exit 0
