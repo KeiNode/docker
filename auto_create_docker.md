@@ -1,0 +1,1 @@
+mkdir -p ~/cloning && cd ~/cloning && curl -fsSL https://raw.githubusercontent.com/KeiNode/docker_no_redhat/main/install.sh/uninstall.sh -o install.sh uninstall.sh && chmod +x install.sh uninstall.sh && sudo bash install.sh
