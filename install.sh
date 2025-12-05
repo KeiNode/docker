@@ -210,7 +210,7 @@ main() {
   fix_line_endings
   print_banner
 
-  if ! ask_confirm_default_n "Do you next installation?"; then
+  if ! ask_confirm_default_n "Do you want to continue with the installation?"; then
     echo -e "${YELLOW}Installation canceled by user.${NC}"
     # successful cancel -> exit 0 (trap won't treat as error)
     trap - EXIT
